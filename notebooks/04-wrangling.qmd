@@ -84,3 +84,4 @@ long_table
 # then: per_person |> semi_join(smokers, by = "pid")
 # then: group_by(arm) |> summarise(...) for per-arm pH means among smokers only
 ```
+q()

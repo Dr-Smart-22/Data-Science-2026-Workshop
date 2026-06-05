@@ -1,0 +1,211 @@
+---
+title: "Group B — Menstruation Study: Data Dictionary"
+subtitle: "Exploring the menstrual health dataset"
+format:
+  html:
+    toc: true
+    code-fold: true
+    embed-resources: true
+---
+
+```{r}
+#| include: false
+library(tidyverse)
+```
+
+## Overview
+
+This dataset comes from a **menstrual health study** (Group B). It contains
+data from 27 participants across four linked CSV files:
+
+| # | File | What it contains |
+|---|------|------------------|
+| 1 | `00_sample_ids_period.csv` | Links participants to their samples across time points |
+| 2 | `01_participant_metadata_period.csv` | Demographics and health info about each participant |
+| 3 | `02_luminex_period.csv` | Cytokine/chemokine concentrations measured via Luminex |
+| 4 | `03_flow_cytometry_period.csv` | Immune cell counts measured via flow cytometry |
+
+The study has two main groupings:
+
+- **Arm** (*birth_control* vs *no_birth_control*) — whether the participant
+  uses hormonal birth control.
+- **Time point** (*onset*, *end_bleeding*, *week_prior*, *week_post*) — when
+  the sample was collected relative to the participant's menstrual period.
+
+---
+
+## File 1: Sample IDs (`00_sample_ids_period.csv`)
+
+**What a row represents:** One biological sample collected from a participant
+at a specific time point.
+
+```{r}
+sample_ids <- read_csv("../../data/group_b_menstruation/00_sample_ids_period.csv")
+glimpse(sample_ids)
+```
+
+| Column | Type | Meaning |
+|--------|------|---------|
+| `pid` | character | **Participant ID** — a unique identifier for each person in the study (e.g., `pid_01`, `pid_12`). Links to `01_participant_metadata_period.csv`. |
+| `time_point` | character | **Menstrual cycle time point** when the sample was collected. One of: `onset` (start of period), `end_bleeding` (end of bleeding), `week_prior` (one week before onset), `week_post` (one week after end of bleeding). |
+| `arm` | character | **Study arm** — whether the participant uses hormonal birth control (`birth_control`) or not (`no_birth_control`). This is redundant with the metadata file. |
+| `sample_id` | character | **Unique sample identifier** (e.g., `SAMP001`). This is the key used to link to the Luminex and flow cytometry data. Each participant may contribute multiple samples (one per time point). |
+
+---
+
+## File 2: Participant Metadata (`01_participant_metadata_period.csv`)
+
+**What a row represents:** One participant enrolled in the study.
+
+```{r}
+metadata <- read_csv("../../data/group_b_menstruation/01_participant_metadata_period.csv")
+glimpse(metadata)
+```
+
+| Column | Type | Meaning |
+|--------|------|---------|
+| `pid` | character | **Participant ID** — matches the `pid` in the sample IDs file. Each participant appears exactly once here. |
+| `arm` | character | **Study arm** — `birth_control` (uses hormonal birth control) or `no_birth_control` (does not use hormonal birth control). This is the main grouping variable for the study. |
+| `age` | double | **Age of the participant** in years. Ranges from 26 to 41 in this dataset. |
+| `pcos_status` | character | **PCOS diagnosis status** — whether the participant has Polycystic Ovary Syndrome. Values: `pcos` (diagnosed) or `no disease` (no diagnosis). |
+| `period_product` | character | **Menstrual product used** — `tampon`, `pad`, or `menstrual_cup`. |
+| `sex` | character | **Sex assigned at birth** — all participants are `female` in this dataset. |
+
+---
+
+## File 3: Luminex Results (`02_luminex_period.csv`)
+
+**What a row represents:** The concentration of one cytokine or chemokine
+measured in one biological sample.
+
+```{r}
+luminex <- read_csv("../../data/group_b_menstruation/02_luminex_period.csv")
+glimpse(luminex)
+```
+
+This is a **long/tidy** format: each row is one analyte measurement for one
+sample. To see it as a wide table, you would pivot by `cytokine`.
+
+```{r}
+# How many unique cytokines are measured?
+luminex |> 
+  distinct(cytokine) |> 
+  pull(cytokine)
+```
+
+```{r}
+# How many samples and how are values censored?
+luminex |> 
+  count(limits)
+```
+
+| Column | Type | Meaning |
+|--------|------|---------|
+| `sample_id` | character | **Sample identifier** — matches `sample_id` in the sample IDs file. Links each measurement to a participant and time point. |
+| `cytokine` | character | **Name of the analyte measured**. The 8 cytokines/chemokines in this panel are: `IL-1a`, `IL-1b`, `IL-6`, `TNFa`, `MIG` (CXCL9), `IFNg`, `IP-10` (CXCL10), and `MIP-3a` (CCL20). These are immune signaling proteins involved in inflammation and immune regulation. |
+| `conc` | double | **Concentration** of the cytokine in the sample (units are relative Luminex fluorescence / standard curve units). Numeric value. |
+| `limits` | character | **Censoring status** — tells you if the concentration was reliably detectable. One of: `not_censored` (measured successfully), `below_detection_limit` (too low to detect), `above_detect_limit` (too high — above the assay's upper limit). These values need special handling in analysis (e.g., imputation or threshold modeling). |
+
+---
+
+## File 4: Flow Cytometry (`03_flow_cytometry_period.csv`)
+
+**What a row represents:** The immune cell counts from one biological sample,
+broken down by several cell types measured via flow cytometry.
+
+```{r}
+flow <- read_csv("../../data/group_b_menstruation/03_flow_cytometry_period.csv")
+glimpse(flow)
+```
+
+```{r}
+# Summary of the cell count columns
+flow |> 
+  select(-sample_id) |> 
+  summary()
+```
+
+| Column | Type | Meaning |
+|--------|------|---------|
+| `sample_id` | character | **Sample identifier** — matches `sample_id` in the sample IDs file. |
+| `live_cd19_negative` | double | **Total live cells that are CD19−** (all live cells that are not B cells). This is a gating/parent population. |
+| `cd45_negative` | double | **CD45− cells** — cells that do not express CD45 (the leukocyte common antigen). These are typically non-immune cells (e.g., epithelial, stromal, or red blood cells). |
+| `cd45_positive` | double | **CD45+ cells** — white blood cells / leukocytes. These are immune cells that express CD45. |
+| `neutrophils` | double | **Neutrophil count** — a type of granulocyte and the most abundant white blood cell. Key in innate immunity and inflammation. |
+| `non_neutrophils` | double | **CD45+ cells that are not neutrophils** — all other white blood cells (lymphocytes, monocytes, eosinophils, basophils, etc.). |
+| `cd3_negative` | double | **CD3− cells** (within the non-neutrophil population) — immune cells that are not T cells (e.g., B cells, NK cells, monocytes). |
+| `cd3_positive` | double | **CD3+ cells** — T lymphocytes (T cells). CD3 is a marker expressed by all T cells. |
+| `cd4_t_cells` | double | **CD4+ T cells** — helper T cells (also called CD4+ T lymphocytes). These coordinate immune responses. |
+| `cd8_t_cells` | double | **CD8+ T cells** — cytotoxic T cells (also called CD8+ T lymphocytes). These kill infected or abnormal cells. |
+
+**Gating hierarchy (how the cell types relate to each other):**
+
+```
+All live CD19− cells
+├── CD45− (non-immune cells)
+└── CD45+ (leukocytes)
+    ├── Neutrophils
+    └── Non-neutrophils
+        ├── CD3− (non-T cells: B cells, NK cells, monocytes, etc.)
+        └── CD3+ (T cells)
+            ├── CD4+ T cells (helper T cells)
+            └── CD8+ T cells (cytotoxic T cells)
+```
+
+Note that `cd4_t_cells` + `cd8_t_cells` do **not** necessarily equal
+`cd3_positive` — there are other T cell subsets (like gamma-delta T cells)
+that are CD3+ but neither CD4+ nor CD8+.
+
+---
+
+## Relationships Between Files
+
+The files can be joined together using these key columns:
+
+```
+01_participant_metadata     00_sample_ids              02_luminex
+┌─────────────┐            ┌─────────────┐            ┌─────────────┐
+│ pid         │◄──────┐    │ pid         │            │ sample_id   │
+│ arm         │       │    │ time_point  │            │ cytokine    │
+│ age         │       │    │ arm         │            │ conc        │
+│ pcos_status │       │    │ sample_id   │──┐         │ limits      │
+│ period_product│      │    └─────────────┘  │         └─────────────┘
+│ sex         │       │                      │
+└─────────────┘       │                      │
+                      │                      │
+                      │         03_flow_cytometry
+                      │         ┌─────────────┐
+                      │         │ sample_id   │◄─┘
+                      │         │ live_cd19…  │
+                      └─────────│ cd45_…      │
+                                │ neutrophils │
+                                │ …           │
+                                └─────────────┘
+```
+
+To build a complete analysis dataset joining all files:
+
+```{r}
+#| code-fold: true
+# Join sample IDs with participant metadata
+full_data <- sample_ids |> 
+  left_join(metadata, by = "pid", suffix = c("", "_meta")) |> 
+  # Drop the redundant arm column from sample_ids (we keep the one from metadata)
+  select(-arm) |> 
+  rename(arm = arm_meta)
+
+# Join with Luminex (long format)
+full_data_luminex <- full_data |> 
+  left_join(luminex, by = "sample_id")
+
+# Join with flow cytometry
+full_data_flow <- full_data |> 
+  left_join(flow, by = "sample_id")
+
+# Preview the combined datasets
+glimpse(full_data_luminex)
+```
+
+```{r}
+glimpse(full_data_flow)
+```

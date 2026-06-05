@@ -1,0 +1,160 @@
+---
+title: "Group B — Menstruation Study Data Dictionary"
+format:
+  html:
+    toc: true
+    code-fold: true
+    embed-resources: true
+---
+
+## Overview
+
+This document describes the four CSV files in **group_b_menstruation**.
+Each section below loads one file, shows a glimpse of the data, and explains
+what every row and column means.
+
+```{r setup, include=FALSE}
+library(tidyverse)
+```
+
+---
+
+## 1. Sample IDs — `00_sample_ids_period.csv`
+
+```{r file-00}
+sample_ids <- read_csv("data/group_b_menstruation/00_sample_ids_period.csv")
+glimpse(sample_ids)
+```
+
+### What one row represents
+
+A single row is **one biological sample** taken from a participant at a specific
+time point during her menstrual cycle.
+
+### Column meanings
+
+| Column | Type | Meaning |
+|--------|------|---------|
+| `pid` | character | Participant ID (e.g. `pid_01`). Links to the participant metadata file. |
+| `time_point` | character | When during the cycle the sample was taken: <br>• `onset` — at the start of menstruation<br>• `end_bleeding` — when bleeding ended<br>• `week_prior` — one week before the next period<br>• `week_post` — one week after the next period |
+| `arm` | character | Study arm: `birth_control` or `no_birth_control` |
+| `sample_id` | character | Unique sample identifier (e.g. `SAMP001`). Used to join to the Luminex and flow cytometry files. |
+
+---
+
+## 2. Participant Metadata — `01_participant_metadata_period.csv`
+
+```{r file-01}
+participant_meta <- read_csv("data/group_b_menstruation/01_participant_metadata_period.csv")
+glimpse(participant_meta)
+```
+
+### What one row represents
+
+A single row is **one participant** enrolled in the study.
+
+### Column meanings
+
+| Column | Type | Meaning |
+|--------|------|---------|
+| `pid` | character | Participant ID. Matches the same IDs in the sample IDs file. |
+| `arm` | character | Study arm: `birth_control` or `no_birth_control`. |
+| `age` | double | Age of the participant in years (range 26–41). |
+| `pcos_status` | character | PCOS diagnosis: `pcos` or `no disease`. |
+| `period_product` | character | Menstrual product the participant uses: `tampon`, `pad`, or `menstrual_cup`. |
+| `sex` | character | Sex of participant — all entries are `female`. |
+
+---
+
+## 3. Luminex Results — `02_luminex_period.csv`
+
+```{r file-02}
+luminex <- read_csv("data/group_b_menstruation/02_luminex_period.csv")
+glimpse(luminex)
+```
+
+### What one row represents
+
+A single row is the **measured concentration of one cytokine** in one sample.
+The data is in **long format** — each sample has 8 rows (one per cytokine).
+
+### Column meanings
+
+| Column | Type | Meaning |
+|--------|------|---------|
+| `sample_id` | character | Unique sample identifier. Links to the sample IDs file. |
+| `cytokine` | character | Which immune signalling protein was measured: `IL-1a`, `IL-1b`, `IL-6`, `TNFa`, `MIG`, `IFNg`, `IP-10`, or `MIP-3a`. |
+| `conc` | double | Concentration of the cytokine in the sample (units depend on the assay). |
+| `limits` | character | Censoring status of the measurement:<br>• `not_censored` — the value is reliable<br>• `below_detection_limit` — concentration was too low to measure precisely<br>• `above_detect_limit` — concentration was above the upper detection limit |
+
+### Cytokines explained
+
+| Cytokine | Role |
+|----------|------|
+| IL-1a, IL-1b | Pro-inflammatory — involved in immune activation and fever |
+| IL-6 | Pro- and anti-inflammatory — a key signalling molecule |
+| TNFa | Pro-inflammatory — triggers inflammation and cell death |
+| MIG (CXCL9) | Chemoattractant — recruits immune cells to infection sites |
+| IFNg | Anti-viral and immune-stimulating — activates macrophages |
+| IP-10 (CXCL10) | Chemoattractant — recruits T-cells and NK cells |
+| MIP-3a (CCL20) | Chemoattractant — recruits lymphocytes and dendritic cells |
+
+---
+
+## 4. Flow Cytometry — `03_flow_cytometry_period.csv`
+
+```{r file-03}
+flow <- read_csv("data/group_b_menstruation/03_flow_cytometry_period.csv")
+glimpse(flow)
+```
+
+### What one row represents
+
+A single row is the **cell counts from flow cytometry** for one sample. Flow
+cytometry sorts cells by type based on proteins on their surface (CD markers).
+
+### Column meanings
+
+| Column | Type | Meaning |
+|--------|------|---------|
+| `sample_id` | character | Unique sample identifier. Links to the sample IDs file. |
+| `live_cd19_negative` | double | Total live cells (excluding B-cells, which are CD19+). This is the starting count. |
+| `cd45_negative` | double | Cells that do **not** carry CD45 (the common leukocyte / white blood cell marker) — mostly non-immune cells. |
+| `cd45_positive` | double | Cells that **do** carry CD45 — these are white blood cells (leukocytes). |
+| `neutrophils` | double | Count of neutrophils, the most abundant type of white blood cell (first responders to infection). |
+| `non_neutrophils` | double | White blood cells that are **not** neutrophils (lymphocytes, monocytes, etc.). |
+| `cd3_negative` | double | CD45+ cells that are **not** T-cells (CD3 is a T-cell marker). |
+| `cd3_positive` | double | CD45+ cells that **are** T-cells (carry CD3). |
+| `cd4_t_cells` | double | Helper T-cells (CD4+) — they "help" coordinate the immune response. |
+| `cd8_t_cells` | double | Killer / cytotoxic T-cells (CD8+) — they kill infected or abnormal cells. |
+
+### Cell hierarchy (gating strategy)
+
+```
+Live CD19- cells
+├── CD45- (non-immune cells)
+└── CD45+ (leukocytes / white blood cells)
+    ├── Neutrophils
+    └── Non-neutrophils
+        ├── CD3- (not T-cells)
+        └── CD3+ (T-cells)
+            ├── CD4+ (helper T-cells)
+            └── CD8+ (killer T-cells)
+```
+
+---
+
+## Joining the data together
+
+You can connect all four tables using `pid` and/or `sample_id`:
+
+```{r example-join}
+# Start with sample IDs, add participant info, then Luminex and flow data
+full_data <- sample_ids |>
+  left_join(participant_meta, by = "pid") |>
+  left_join(luminex, by = "sample_id") |>
+  left_join(flow, by = "sample_id")
+
+# Preview one participant's data
+full_data |> filter(pid == "pid_01") |> head(10)
+```

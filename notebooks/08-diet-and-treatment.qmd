@@ -1,0 +1,162 @@
+---
+title: "Does diet affect treatment? — Yogurt and the vaginal microbiome"
+format: html
+editor: source
+execute:
+  warning: false
+  message: false
+---
+
+> **Question:** If you eat yogurt, does your vaginal microbiome respond
+> differently to antibiotic treatment compared to keeping your usual diet?
+
+The study had 51 participants. Half ate yogurt daily, the other half kept
+their usual diet. Everyone got antibiotics, and researchers measured
+bacterial levels at **baseline** (before antibiotics) and **after
+antibiotic** treatment.
+
+The bacteria measured are:
+
+- **Total bacteria** — all bacteria together
+- ***L. crispatus*** — a "good" bacterium linked to vaginal health
+- ***L. iners*** — another common vaginal bacterium
+
+```{r setup}
+library(tidyverse)
+library(here)
+library(ggpubr)
+
+# Read in the yogurt study data
+sample_ids <- read_csv(here("data/group_a_yogurt/00_sample_ids_yogurt.csv"))
+metadata   <- read_csv(here("data/group_a_yogurt/01_participant_metadata_yogurt.csv"))
+qpcr       <- read_csv(here("data/group_a_yogurt/02_qpcr_results_yogurt.csv"))
+```
+
+## Join the data together
+
+We connect the tables by `sample_id` so each bacterial measurement also has
+the participant's diet group (`arm`) and time point.
+
+```{r join}
+# Join qPCR results with sample info (time_point, arm)
+bacteria_data <- qpcr |>
+  left_join(sample_ids, by = "sample_id") |>
+  mutate(time_point = fct_relevel(time_point, "baseline", "after_antibiotic"))
+
+# Take a peek
+bacteria_data
+```
+
+## Boxplot: bacterial levels by diet group
+
+Each plot below compares the **yogurt** group (pink) to the **unchanged
+diet** group (blue) — separately at baseline and after antibiotics. The
+p-value tells us whether the difference between groups is larger than what
+we'd expect by chance.
+
+```{r bacteria-boxplots}
+#| fig-width: 8
+#| fig-height: 6
+
+# Reshape the data to long format for faceting
+bacteria_long <- bacteria_data |>
+  pivot_longer(
+    cols = c(qpcr_bacteria, qpcr_crispatus, qpcr_iners),
+    names_to = "bacteria_type",
+    values_to = "count"
+  ) |>
+  mutate(
+    # Clean up labels for the plot
+    bacteria_type = case_match(
+      bacteria_type,
+      "qpcr_bacteria" ~ "Total bacteria",
+      "qpcr_crispatus" ~ "L. crispatus",
+      "qpcr_iners" ~ "L. iners"
+    ),
+    bacteria_type = fct_inorder(bacteria_type)
+  )
+
+# Boxplot faceted by time point and bacteria type
+ggplot(bacteria_long, aes(x = arm, y = count, fill = arm)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.7) +
+  geom_jitter(width = 0.15, alpha = 0.5, size = 1.5) +
+  facet_grid(bacteria_type ~ time_point, scales = "free_y") +
+  scale_fill_manual(values = c("unchanged_diet" = "#4A90D9", "yogurt" = "#E86A92")) +
+  stat_compare_means(
+    method = "wilcox.test",
+    label.x = 1.3,
+    size = 3
+  ) +
+  labs(
+    title = "Does diet affect the microbiome's response to antibiotics?",
+    subtitle = "Comparing yogurt vs unchanged diet at baseline and after antibiotic treatment",
+    x = "Diet group",
+    y = "Bacterial count (qPCR)",
+    fill = "Diet group"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    strip.text = element_text(face = "bold", size = 10),
+    plot.title = element_text(face = "bold")
+  )
+```
+
+### What to look for
+
+- **Baseline column** — Are the groups already different before the
+  antibiotic? If the p-value is small (< 0.05), the groups weren't well
+  matched at the start.
+- **After antibiotic column** — Does the diet group make a difference after
+  treatment? A small p-value here suggests eating (or not eating) yogurt
+  changed how the microbiome responded to antibiotics.
+
+---
+
+## Paired look: how each person changed
+
+This plot shows each participant's bacterial levels **before** and **after**
+antibiotics, with a line connecting the same person. This lets us see:
+
+- Did *L. crispatus* go up or down for each person?
+- Did the yogurt group recover differently than the unchanged diet group?
+
+```{r paired-plots}
+#| fig-width: 9
+#| fig-height: 7
+
+bacteria_long |>
+  ggplot(aes(x = time_point, y = count)) +
+  geom_line(aes(group = pid), alpha = 0.25, linewidth = 0.4) +
+  geom_point(aes(color = arm), size = 2, alpha = 0.7) +
+  facet_grid(bacteria_type ~ arm, scales = "free_y") +
+  scale_color_manual(values = c("unchanged_diet" = "#4A90D9", "yogurt" = "#E86A92")) +
+  stat_compare_means(
+    method = "wilcox.test",
+    paired = TRUE,
+    comparisons = list(c("baseline", "after_antibiotic")),
+    size = 3
+  ) +
+  labs(
+    title = "How did each person's bacteria levels change?",
+    subtitle = "Each line is one participant, from baseline → after antibiotics",
+    x = "Time point",
+    y = "Bacterial count (qPCR)",
+    color = "Diet group"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    strip.text = element_text(face = "bold", size = 10),
+    plot.title = element_text(face = "bold")
+  )
+```
+
+### What to look for
+
+- The p-value in each panel tells you if the **change** from baseline to
+  after antibiotics was significant within that group.
+- Compare the direction of change between the **yogurt** and **unchanged
+  diet** columns. If lines mostly go in opposite directions (or one group
+  changes a lot while the other stays flat), that suggests diet affected the
+  treatment response.

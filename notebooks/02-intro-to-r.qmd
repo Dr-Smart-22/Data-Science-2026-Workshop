@@ -23,14 +23,65 @@ library(here)
 
 ## Part 1 — Run a chunk, write a sentence, render
 
+Let's start simple. This chunk does a basic calculation in R and stores the
+result in a variable. R prints the result automatically when you run it.
+
 ```{r}
-# your code here
+# Add two numbers together
+ten <- 3 + 7
+ten
 ```
+
+R can also work with text (called **strings**). The `c()` function combines
+values into a **vector** — a list of things of the same type.
+
+```{r}
+# Make a vector of numbers and calculate the average
+my_numbers <- c(12, 18, 25, 33, 47)
+mean(my_numbers)
+```
+
+**My sentence:** In the first chunk, I assigned `3 + 7` to a variable called
+`ten`, and R printed `10`. In the second chunk, I made a vector of five numbers
+and `mean()` calculated their average (which is `27`).
 
 ## Part 2 — Read the data and look at it
 
+Here we read in the instructional dataset files using `read_csv()`. This function
+comes from the `readr` package (part of the tidyverse) and turns a CSV file into
+a **data frame** — R's version of a spreadsheet with rows and columns.
+
 ```{r}
-# your code here
+# Read the sample IDs file — this tells us which samples belong to which participant
+samples <- read_csv(here("data", "instructional_dataset", "00_sample_ids_UKZN_workshop_2023.csv"))
+
+# Read participant metadata — age, smoking status, education, etc.
+metadata <- read_csv(here("data", "instructional_dataset", "01_participant_metadata_UKZN_workshop_2023.csv"))
+
+# Read clinical measurements — Nugent score, CRP, pH
+clinical <- read_csv(here("data", "instructional_dataset", "02_visit_clinical_measurements_UKZN_workshop_2023.csv"))
+```
+
+`glimpse()` gives us a quick summary — it shows the number of rows, the column
+names, their data types (e.g. `<chr>` = text, `<dbl>` = decimal number), and a
+peek at the first few values.
+
+```{r}
+# Look at the structure of each dataset
+glimpse(samples)
+glimpse(metadata)
+glimpse(clinical)
+
+# head() shows the first 6 rows — handy for a quick sanity check
+head(samples)
+```
+
+`summary()` gives us basic statistics for each column (min, max, mean, etc. for
+numbers; counts for text columns).
+
+```{r}
+summary(metadata)
+summary(clinical)
 ```
 
 ## Part 3 — Pull out columns and summarise them
